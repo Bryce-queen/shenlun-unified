@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>申论统一修炼台</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+<div id="app">
+  <!-- ============ HOME VIEW ============ -->
+  <div id="view-home" class="view active">
+    <div class="home-header">
+      <h1>申论修炼台 ⚔️</h1>
+      <div class="sub" id="home-sub">目标70分 · 12周计划</div>
+    </div>
+    <div id="home-week-card"></div>
+    <div class="stat-row" id="home-stats"></div>
+    <div class="section-title"><span class="icon">📋</span>今日任务</div>
+    <div class="card" id="home-tasks"></div>
+    <div id="home-start-btn" class="mt-12"></div>
+  </div>
+
+  <!-- ============ REVIEW VIEW ============ -->
+  <div id="view-review" class="view">
+    <div id="review-decks">
+      <div class="section-title"><span class="icon">📖</span>卡片复习</div>
+      <div class="deck-grid" id="deck-grid"></div>
+      <div class="card card-accent" id="review-quick-start">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:14px;font-weight:600">今日待复习</div>
+            <div style="font-size:12px;color:var(--text2)" id="review-due-count">0 张卡片</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="startDailyReview()">开始复习</button>
+        </div>
+      </div>
+    </div>
+    <div id="review-session" class="hidden">
+      <div class="flex-between mb-8">
+        <button class="btn btn-outline btn-sm" onclick="exitReview()">← 返回</button>
+        <div class="review-progress" id="review-progress">0/0</div>
+      </div>
+      <div class="timer-bar" id="review-timer-bar"><div class="fill" id="review-timer-fill"></div></div>
+      <div class="flashcard-container" id="flashcard-container">
+        <div class="flashcard" id="flashcard" onclick="flipCard()">
+          <div class="flashcard-face flashcard-front">
+            <div class="fc-tag" id="fc-tag"></div>
+            <div class="fc-text" id="fc-front-text"></div>
+            <div style="font-size:12px;color:var(--text3);margin-top:16px">点击翻转</div>
+          </div>
+          <div class="flashcard-face flashcard-back">
+            <div class="fc-label">参考答案</div>
+            <div class="fc-text" id="fc-back-text"></div>
+            <div class="fc-example" id="fc-example"></div>
+          </div>
+        </div>
+      </div>
+      <div class="rate-btns" id="rate-btns">
+        <button class="rate-btn r1" onclick="rateCard(1)">😵 忘了</button>
+        <button class="rate-btn r2" onclick="rateCard(2)">🤔 模糊</button>
+        <button class="rate-btn r3" onclick="rateCard(3)">💪 记住了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PRACTICE VIEW ============ -->
+  <div id="view-practice" class="view">
+    <div id="practice-list">
+      <div class="section-title"><span class="icon">✏️</span>技能微练习</div>
+      <div class="card card-primary vocab-trainer-card">
+        <div class="flex-between gap-8">
+          <div>
+            <div style="font-size:15px;font-weight:700">🪄 规范词替换训练</div>
+            <div class="text-sm text-muted">把大白话改写成申论规范表达</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="startVocabTrainer()">开始</button>
+        </div>
+        <div class="text-sm text-muted mt-8" id="vocab-trainer-stats"></div>
+      </div>
+      <div class="card card-accent material-trainer-card">
+        <div class="flex-between gap-8">
+          <div>
+            <div style="font-size:15px;font-weight:700">🔎 材料阅读训练</div>
+            <div class="text-sm text-muted">识别主体、问题、原因、对策、成效和数据结论</div>
+          </div>
+          <button class="btn btn-accent btn-sm" onclick="startMaterialTrainer()">开始</button>
+        </div>
+        <div class="text-sm text-muted mt-8" id="material-trainer-stats"></div>
+      </div>
+      <div class="card mock-exam-card">
+        <div class="flex-between gap-8">
+          <div>
+            <div style="font-size:15px;font-weight:700">⏳ 2.5小时模考模式</div>
+            <div class="text-sm text-muted">训练小题60分钟、大作文90分钟的实战节奏</div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="startMockExam()">开始</button>
+        </div>
+        <div class="text-sm text-muted mt-8" id="mock-exam-stats"></div>
+      </div>
+      <input class="search-input mb-12" id="practice-search" type="search" placeholder="搜索技能、题型或提示..." oninput="renderPractice()">
+      <div id="skill-type-list"></div>
+    </div>
+    <div id="practice-skill" class="hidden">
+      <div class="flex-between mb-8">
+        <button class="btn btn-outline btn-sm" onclick="backToSkillList()">← 返回</button>
+        <span class="tag tag-blue" id="skill-tag"></span>
+      </div>
+      <h3 style="font-size:16px;margin-bottom:4px" id="skill-name"></h3>
+      <div class="text-sm text-muted mb-8" id="skill-exam"></div>
+      <div class="card card-accent card-sm" id="skill-tip-card">
+        <div class="text-sm" style="color:var(--accent)" id="skill-tip"></div>
+      </div>
+    </div>
+    <div id="practice-exercise" class="hidden exercise-view">
+      <div class="flex-between mb-8">
+        <button class="btn btn-outline btn-sm" onclick="backToSkill()">← 返回</button>
+        <span id="ex-counter" class="text-sm text-muted"></span>
+      </div>
+      <div class="timer-bar" id="ex-timer-bar"><div class="fill" id="ex-timer-fill"></div></div>
+      <div id="ex-timer-text" class="text-sm text-muted text-center mb-8"></div>
+      <div class="ex-question" id="ex-question"></div>
+      <textarea id="ex-answer" placeholder="在这里写下你的答案..."></textarea>
+      <div class="draft-status" id="draft-status"></div>
+      <div class="ex-actions">
+        <button class="btn btn-primary btn-sm" onclick="showRefAnswer()">查看参考答案</button>
+        <button class="btn btn-outline btn-sm" onclick="skipExercise()">跳过</button>
+      </div>
+      <div class="ex-ref" id="ex-ref"></div>
+      <div class="self-rate hidden" id="self-rate">
+        <div class="rate-label">自评答题质量：</div>
+        <div class="rate-btns">
+          <button class="rate-btn r1" onclick="selfRate(1)">❌ 需再练</button>
+          <button class="rate-btn r2" onclick="selfRate(2)">🟡 基本掌握</button>
+          <button class="rate-btn r3" onclick="selfRate(3)">✅ 掌握了</button>
+        </div>
+      </div>
+      <div class="exercise-nav" id="ex-nav"></div>
+    </div>
+    <div id="vocab-trainer" class="hidden exercise-view">
+      <div class="flex-between mb-8">
+        <button class="btn btn-outline btn-sm" onclick="exitVocabTrainer()">← 返回</button>
+        <span id="vocab-counter" class="text-sm text-muted"></span>
+      </div>
+      <div class="ex-question" id="vocab-question"></div>
+      <textarea id="vocab-answer" placeholder="写出规范表达，尽量用机关化、标准化语言..."></textarea>
+      <div class="ex-actions">
+        <button class="btn btn-primary btn-sm" onclick="checkVocabAnswer()">查看参考表达</button>
+        <button class="btn btn-outline btn-sm" onclick="nextVocabQuestion(false)">跳过</button>
+      </div>
+      <div class="ex-ref" id="vocab-ref"></div>
+      <div class="self-rate hidden" id="vocab-rate">
+        <div class="rate-label">自评替换质量：</div>
+        <div class="rate-btns">
+          <button class="rate-btn r1" onclick="rateVocabAnswer(false)">❌ 需再练</button>
+          <button class="rate-btn r3" onclick="rateVocabAnswer(true)">✅ 表达规范</button>
+        </div>
+      </div>
+    </div>
+    <div id="material-trainer" class="hidden exercise-view">
+      <div class="flex-between mb-8">
+        <button class="btn btn-outline btn-sm" onclick="exitMaterialTrainer()">← 返回</button>
+        <span id="material-counter" class="text-sm text-muted"></span>
+      </div>
+      <div class="ex-question" id="material-text"></div>
+      <div class="text-sm text-muted mb-8">这段材料包含哪些信息？</div>
+      <div class="material-tags" id="material-tags"></div>
+      <textarea id="material-answer" placeholder="提炼要点：主体/问题/原因/对策/成效/数据结论..."></textarea>
+      <div class="ex-actions">
+        <button class="btn btn-primary btn-sm" onclick="checkMaterialAnswer()">查看参考提炼</button>
+        <button class="btn btn-outline btn-sm" onclick="nextMaterialQuestion(false)">跳过</button>
+      </div>
+      <div class="ex-ref" id="material-ref"></div>
+      <div class="self-rate hidden" id="material-rate">
+        <div class="rate-label">自评材料阅读质量：</div>
+        <div class="rate-btns">
+          <button class="rate-btn r1" onclick="rateMaterialAnswer(false)">❌ 漏点明显</button>
+          <button class="rate-btn r3" onclick="rateMaterialAnswer(true)">✅ 找点准确</button>
+        </div>
+      </div>
+    </div>
+    <div id="mock-exam" class="hidden exercise-view">
+      <div class="flex-between mb-8">
+        <button class="btn btn-outline btn-sm" onclick="finishMockExam(true)">结束模考</button>
+        <span id="mock-phase" class="tag tag-blue">小题阶段</span>
+      </div>
+      <div class="mock-timer" id="mock-timer">2:30:00</div>
+      <div class="progress-bar mb-12"><div class="fill" id="mock-progress"></div></div>
+      <div class="card card-sm">
+        <div class="text-sm text-muted">建议时间分配</div>
+        <div class="mock-plan">
+          <div>小题：60分钟</div>
+          <div>大作文：90分钟</div>
+        </div>
+      </div>
+      <textarea id="mock-note" placeholder="模考过程中记录：哪类题超时？哪里卡住？作文是否留足90分钟？"></textarea>
+      <div class="ex-actions">
+        <button class="btn btn-primary btn-sm" onclick="markMockPhase('small')">标记小题完成</button>
+        <button class="btn btn-accent btn-sm" onclick="markMockPhase('essay')">进入作文阶段</button>
+        <button class="btn btn-danger btn-sm" onclick="finishMockExam(false)">交卷复盘</button>
+      </div>
+      <div class="ex-ref show" id="mock-guidance">建议：前60分钟完成概括、分析、对策、应用文；剩余90分钟完成大作文。不要在单道小题上纠结超过25分钟。</div>
+    </div>
+  </div>
+
+  <!-- ============ ERROR VIEW ============ -->
+  <div id="view-errors" class="view">
+    <div class="section-title"><span class="icon">❌</span>错题本</div>
+    <div class="toolbar-row">
+      <input class="search-input" id="error-search" type="search" placeholder="搜索题干、答案或错误类型..." oninput="applyErrorFilters()">
+      <select class="select-input" id="error-sort" onchange="applyErrorFilters()">
+        <option value="newest">最新</option>
+        <option value="oldest">最早</option>
+        <option value="weakest">薄弱优先</option>
+      </select>
+    </div>
+    <div class="error-filter" id="error-filters"></div>
+    <div id="error-list"></div>
+    <div id="error-empty" class="empty-state hidden">
+      <div class="emoji">🎉</div>
+      <div>暂无错题，继续保持！</div>
+    </div>
+    <div class="mt-12" id="error-weekend-btn"></div>
+  </div>
+
+  <!-- ============ STATS VIEW ============ -->
+  <div id="view-stats" class="view">
+    <div class="section-title"><span class="icon">📊</span>数据总览</div>
+    <div class="card text-center">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:8px">五大题型掌握度</div>
+      <div class="radar-chart" id="radar-chart"></div>
+    </div>
+    <div class="stats-grid" id="stats-grid"></div>
+    <div class="section-title"><span class="icon">🧾</span>复盘薄弱点</div>
+    <div class="card" id="review-summary"></div>
+    <div class="section-title"><span class="icon">📈</span>近4周正确率</div>
+    <div class="card" id="weekly-chart"></div>
+    <div class="section-title"><span class="icon">📘</span>手册速查</div>
+    <div class="card" id="handbook-card">
+      <input class="search-input mb-12" id="handbook-search" type="search" placeholder="搜索题型、公式、避坑、资料..." oninput="renderHandbook()">
+      <div class="handbook-tabs" id="handbook-tabs"></div>
+      <div id="handbook-list"></div>
+    </div>
+    <div class="section-title"><span class="icon">⚙️</span>设置</div>
+    <div class="card" id="settings-card"></div>
+    <input type="file" id="backup-file" accept="application/json,.json" class="hidden" onchange="importBackup(this.files && this.files[0])">
+  </div>
+</div>
+
+<!-- ============ Bottom Tab Bar ============ -->
+<nav class="tab-bar" id="tab-bar">
+  <button class="tab active" data-view="home" onclick="switchView('home')">
+    <span class="tab-icon">🏠</span>首页
+  </button>
+  <button class="tab" data-view="review" onclick="switchView('review')">
+    <span class="tab-icon">📖</span>复习
+  </button>
+  <button class="tab" data-view="practice" onclick="switchView('practice')">
+    <span class="tab-icon">✏️</span>练习
+  </button>
+  <button class="tab" data-view="errors" onclick="switchView('errors')">
+    <span class="tab-icon">❌</span>错题
+  </button>
+  <button class="tab" data-view="stats" onclick="switchView('stats')">
+    <span class="tab-icon">📊</span>数据
+  </button>
+</nav>
+
+<!-- ============ Weekend Review Modal ============ -->
+<div class="modal-overlay" id="weekend-modal">
+  <div class="modal review-modal">
+    <h2>🔄 周末错题复习</h2>
+    <div id="weekend-content"></div>
+    <div class="mt-12 text-center">
+      <button class="btn btn-outline" onclick="closeWeekendModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Exercise Review Modal ============ -->
+<div class="modal-overlay" id="review-note-modal">
+  <div class="modal">
+    <h2>🧾 本题复盘</h2>
+    <div class="review-form">
+      <div class="rf-group">
+        <div class="rf-label">这题主要问题是什么？</div>
+        <div class="rf-options">
+          <label><input type="checkbox" value="漏点">漏点</label>
+          <label><input type="checkbox" value="分类乱">分类乱</label>
+          <label><input type="checkbox" value="表达口语化">表达口语化</label>
+          <label><input type="checkbox" value="格式错误">格式错误</label>
+          <label><input type="checkbox" value="时间超限">时间超限</label>
+        </div>
+      </div>
+      <div class="rf-group">
+        <div class="rf-label">一句话复盘（可选）</div>
+        <textarea id="review-note-text" placeholder="例如：材料第3段对策漏掉了，答案分类也不够清楚。"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-outline btn-sm" onclick="skipReviewNote()">跳过</button>
+        <button class="btn btn-primary btn-sm" onclick="saveReviewNote()">保存复盘</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="./data.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>
