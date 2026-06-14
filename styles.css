@@ -375,6 +375,11 @@ button, input, textarea, select { font-size:16px; }
   background:var(--card); border-radius:var(--radius); padding:14px;
   margin-bottom:10px; border-left:3px solid var(--danger);
 }
+.error-item.highlight { animation: highlightPulse 1.4s ease; }
+@keyframes highlightPulse {
+  0%,100% { box-shadow:none; }
+  25%,75% { box-shadow:0 0 0 3px var(--accent-dim); border-left-color:var(--accent); }
+}
 .error-item .ei-q { font-size:14px; line-height:1.5; margin-bottom:8px; }
 .error-item .ei-type { margin-bottom:8px; }
 .error-item .ei-ref {
@@ -388,6 +393,15 @@ button, input, textarea, select { font-size:16px; }
   margin-top:8px; font-size:11px; color:var(--text3);
 }
 .error-item .ei-actions { display:flex; gap:6px; margin-top:8px; }
+.daily-error-card { border-left:3px solid var(--danger); }
+.daily-error-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:10px; }
+.daily-error-list { display:flex; flex-direction:column; gap:8px; }
+.daily-error-item {
+  display:flex; justify-content:space-between; align-items:center; gap:8px;
+  padding:8px 0; border-top:1px solid rgba(255,255,255,.04);
+  font-size:13px;
+}
+.daily-error-item:first-child { border-top:none; }
 
 /* ============ Stats View ============ */
 .radar-chart {

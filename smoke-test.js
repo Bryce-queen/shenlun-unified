@@ -10,7 +10,7 @@ const data = read('data.js');
 
 const requiredIds = [
   'app', 'view-home', 'view-review', 'view-practice', 'view-errors', 'view-stats',
-  'backup-reminder', 'update-banner', 'settings-card', 'backup-file', 'tab-bar'
+  'backup-reminder', 'update-banner', 'daily-error-plan', 'settings-card', 'backup-file', 'tab-bar'
 ];
 for(const id of requiredIds){
   if(!html.includes(`id="${id}"`)) throw new Error(`缺少 DOM 节点：#${id}`);
@@ -18,7 +18,8 @@ for(const id of requiredIds){
 
 const requiredFunctions = [
   'renderHome', 'renderSettings', 'exportBackup', 'importBackup', 'runDataHealthCheck',
-  'exportErrorsMarkdown', 'setupUpdateChecks', 'reloadForUpdate', 'sanitizeState'
+  'exportErrorsMarkdown', 'setupUpdateChecks', 'reloadForUpdate', 'sanitizeState',
+  'getDailyErrorPlan', 'renderDailyErrorPlan', 'openDailyErrorPlan'
 ];
 for(const name of requiredFunctions){
   if(!app.includes(`function ${name}`)) throw new Error(`缺少函数：${name}`);
@@ -35,6 +36,7 @@ function createElement(){
     value:'',
     checked:false,
     appendChild(){},
+    insertAdjacentHTML(){},
     click(){},
     remove(){},
     querySelector(){ return null; },

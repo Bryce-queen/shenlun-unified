@@ -327,6 +327,27 @@ function renderBackupReminder(){
   `;
 }
 
+function renderHomeErrorPlan(){
+  const errors = getDailyErrorPlan();
+  if(!errors.length) return '';
+  return `
+    <div class="card card-accent home-error-plan" id="home-error-plan-card">
+      <div class="flex-between gap-8">
+        <div>
+          <div style="font-size:15px;font-weight:700">🎯 今日错题重练</div>
+          <div class="text-sm text-muted">建议优先重练 ${errors.length} 题：${escapeHtml(getErrorTypeSummary(errors))}</div>
+        </div>
+        <button class="btn btn-accent btn-sm" onclick="openDailyErrorPlan()">开始</button>
+      </div>
+    </div>
+  `;
+}
+
+function openDailyErrorPlan(){
+  dailyErrorOnly = true;
+  switchView('errors');
+}
+
 function dismissBackupReminder(){
   state.backupReminderDismissedAt = Date.now();
   saveState(state);
@@ -390,6 +411,8 @@ function renderHome(){
     </div>
   `).join('');
   document.getElementById('home-tasks').innerHTML = `<div class="task-list">${taskHtml}</div>`;
+  document.getElementById('home-error-plan-card')?.remove();
+  document.getElementById('home-tasks').insertAdjacentHTML('beforebegin', renderHomeErrorPlan());
 
   // Start button
   const firstPending = tasks.find(t=>t.type==='练习' && t.desc.includes('0/'));
@@ -1190,6 +1213,83 @@ function backToSkillList(){
 // ERROR NOTEBOOK
 // ============================================================
 let currentErrorFilter = '全部';
+let dailyErrorOnly = false;
+
+function getErrorPriority(error){
+  const ageDays = Math.max(0, (Date.now() - safeNumber(error.createdAt)) / 86400000);
+  const weakScore = Math.max(0, 2 - safeNumber(error.correctCount)) * 30;
+  const ageScore = Math.min(30, ageDays * 3);
+  const typeScore = /漏点|跑题|需再练|忘/.test(error.errorType || '') ? 15 : 5;
+  return weakScore + ageScore + typeScore;
+}
+
+function getDailyErrorPlan(limit=3){
+  return state.errors
+    .filter(e=>!e.cleared)
+    .map(error=>({...error, priority:getErrorPriority(error)}))
+    .sort((a,b)=>b.priority-a.priority || safeNumber(a.correctCount)-safeNumber(b.correctCount) || safeNumber(a.createdAt)-safeNumber(b.createdAt))
+    .slice(0, limit);
+}
+
+function getErrorTypeSummary(errors){
+  const counts = {};
+  errors.forEach(error=>{ counts[error.errorType] = (counts[error.errorType] || 0) + 1; });
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([type,count])=>`${type}×${count}`).join('、') || '暂无';
+}
+
+function renderDailyErrorPlan(){
+  const container = document.getElementById('daily-error-plan');
+  if(!container) return;
+  const errors = getDailyErrorPlan();
+  if(!errors.length){
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = `
+    <div class="card daily-error-card">
+      <div class="daily-error-head">
+        <div>
+          <div class="setting-label">🎯 今日错题重练</div>
+          <div class="setting-desc">优先处理：${escapeHtml(getErrorTypeSummary(errors))}</div>
+        </div>
+        <span class="tag tag-red">${errors.length} 题</span>
+      </div>
+      <div class="daily-error-list">
+        ${errors.map((e,i)=>`
+          <div class="daily-error-item">
+            <span>${i+1}. ${escapeHtml(e.errorType)}</span>
+            <button class="btn btn-outline btn-sm" onclick="focusErrorFromPlan('${escapeJsString(e.id)}')">重练</button>
+          </div>
+        `).join('')}
+      </div>
+      <button class="btn btn-primary btn-block btn-sm mt-12" onclick="showDailyErrorPlanOnly()">只看今日错题</button>
+    </div>
+  `;
+}
+
+function showDailyErrorPlanOnly(){
+  dailyErrorOnly = true;
+  currentErrorFilter = '全部';
+  renderErrors();
+}
+
+function showAllErrors(){
+  dailyErrorOnly = false;
+  renderErrors();
+}
+
+function focusErrorFromPlan(id){
+  dailyErrorOnly = false;
+  renderErrors();
+  requestAnimationFrame(()=>{
+    const el = document.getElementById(`error-${id}`);
+    if(el){
+      el.scrollIntoView({behavior:'smooth', block:'center'});
+      el.classList.add('highlight');
+      setTimeout(()=>el.classList.remove('highlight'), 1400);
+    }
+  });
+}
 
 function addError(question, userAnswer, refAnswer, errorType, source, sourceId){
   // Check if already exists
@@ -1209,18 +1309,23 @@ function addError(question, userAnswer, refAnswer, errorType, source, sourceId){
 
 function renderErrors(){
   const errors = state.errors.filter(e=>!e.cleared);
+  renderDailyErrorPlan();
   const filters = ['全部','练习题','卡片','漏点','跑题','表达不规范','格式错误','需再练','忘了'];
   const filterHtml = filters.map((f,i)=>
     `<button class="filter-btn ${f===currentErrorFilter?'active':''}" onclick="filterErrors('${f}',this)">${f}</button>`
   ).join('');
   document.getElementById('error-filters').innerHTML = filterHtml;
 
-  renderErrorList(getFilteredErrors(errors));
+  const visibleErrors = dailyErrorOnly ? getDailyErrorPlan() : errors;
+  renderErrorList(getFilteredErrors(visibleErrors));
 
   // Weekend review button
   const isWeekend = [0,6].includes(new Date().getDay());
   document.getElementById('error-weekend-btn').innerHTML = errors.length > 0
-    ? `<button class="btn ${isWeekend?'btn-accent':'btn-outline'} btn-block" onclick="startWeekendReview()">🔄 周末错题重练${isWeekend?' (今日推荐)':''}</button>`
+    ? `<div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${dailyErrorOnly ? '<button class="btn btn-outline btn-sm" onclick="showAllErrors()">查看全部错题</button>' : ''}
+        <button class="btn ${isWeekend?'btn-accent':'btn-outline'} btn-block" onclick="startWeekendReview()">🔄 周末错题重练${isWeekend?' (今日推荐)':''}</button>
+      </div>`
     : '';
 }
 
@@ -1257,7 +1362,7 @@ function renderErrorList(errors){
     document.getElementById('error-list').innerHTML = '';
     const emptyText = document.querySelector('#error-empty div:last-child');
     const hasFilters = currentErrorFilter !== '全部' || (document.getElementById('error-search')?.value || '').trim();
-    if(emptyText) emptyText.textContent = hasFilters ? '没有找到匹配的错题' : '暂无错题，继续保持！';
+    if(emptyText) emptyText.textContent = dailyErrorOnly ? '今日推荐错题已完成' : (hasFilters ? '没有找到匹配的错题' : '暂无错题，继续保持！');
     document.getElementById('error-empty').classList.remove('hidden');
     return;
   }
@@ -1266,7 +1371,7 @@ function renderErrorList(errors){
   const html = errors.map(e=>{
     const typeTag = e.source==='card' ? 'tag-yellow' : 'tag-blue';
     const errTag = e.errorType.includes('忘') ? 'tag-red' : e.errorType.includes('漏') ? 'tag-yellow' : 'tag-blue';
-    return `<div class="error-item">
+    return `<div class="error-item" id="error-${escapeAttr(e.id)}">
       <div class="ei-q">${escapeHtml(e.question)}</div>
       <div class="ei-type">
         <span class="tag ${typeTag}">${e.source==='card'?'卡片':'练习'}</span>
