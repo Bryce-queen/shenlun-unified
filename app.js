@@ -69,20 +69,146 @@ function escapeHtml(value){
   }[char]));
 }
 
-let state = loadState();
-state = migrateState(state);
-if(!state.studyDates) state.studyDates=[];
-if(!state.exerciseResults) state.exerciseResults={};
-if(!state.exerciseDrafts) state.exerciseDrafts={};
-if(!state.reviewNotes) state.reviewNotes=[];
-if(!state.vocabTrainer) state.vocabTrainer={done:0,correct:0,history:{}};
-if(!state.materialTrainer) state.materialTrainer={done:0,correct:0,history:{}};
-if(!state.mockExams) state.mockExams=[];
-if(!state.errors) state.errors=[];
-if(!state.dailyTime) state.dailyTime={};
-if(state.timerEnabled === undefined) state.timerEnabled=true;
-if(!state.startDate) state.startDate=new Date().toISOString().slice(0,10);
-state.version = STATE_VERSION;
+function escapeJsString(value){
+  return escapeHtml(value).replace(/`/g, '&#96;');
+}
+
+function escapeAttr(value){
+  return escapeHtml(value).replace(/`/g, '&#96;');
+}
+
+function safeNumber(value, fallback=0){
+  const next = Number(value);
+  return Number.isFinite(next) ? next : fallback;
+}
+
+function safePercent(value){
+  return Math.max(0, Math.min(100, safeNumber(value)));
+}
+
+function isPlainObject(value){
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function safeString(value, maxLength=2000){
+  return String(value ?? '').slice(0, maxLength);
+}
+
+function sanitizeId(value){
+  return safeString(value, 80).replace(/[^\w.-]/g, '');
+}
+
+function sanitizeDateString(value){
+  return /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : new Date().toISOString().slice(0,10);
+}
+
+function sanitizeBoolean(value){
+  return value === true;
+}
+
+function sanitizeCounterGroup(value){
+  const source = isPlainObject(value) ? value : {};
+  return {
+    done: Math.max(0, Math.floor(safeNumber(source.done))),
+    correct: Math.max(0, Math.floor(safeNumber(source.correct))),
+    history: isPlainObject(source.history) ? source.history : {}
+  };
+}
+
+function sanitizeState(input){
+  const source = migrateState(isPlainObject(input) ? input : {});
+  const next = {
+    version: STATE_VERSION,
+    studyDates: Array.isArray(source.studyDates) ? source.studyDates.map(sanitizeDateString).slice(-365) : [],
+    exerciseResults: {},
+    exerciseDrafts: {},
+    reviewNotes: [],
+    vocabTrainer: sanitizeCounterGroup(source.vocabTrainer),
+    materialTrainer: sanitizeCounterGroup(source.materialTrainer),
+    mockExams: [],
+    errors: [],
+    dailyTime: {},
+    timerEnabled: source.timerEnabled === undefined ? true : sanitizeBoolean(source.timerEnabled),
+    startDate: sanitizeDateString(source.startDate)
+  };
+
+  if(isPlainObject(source.exerciseResults)){
+    Object.entries(source.exerciseResults).slice(0, 1000).forEach(([key, result])=>{
+      if(!isPlainObject(result)) return;
+      const safeKey = sanitizeId(key);
+      if(!safeKey) return;
+      next.exerciseResults[safeKey] = {
+        rate: Math.max(0, Math.min(3, Math.floor(safeNumber(result.rate)))),
+        answer: safeString(result.answer, 5000),
+        timestamp: Math.max(0, safeNumber(result.timestamp)),
+        skillId: sanitizeId(result.skillId),
+        exIdx: Math.max(0, Math.floor(safeNumber(result.exIdx)))
+      };
+    });
+  }
+
+  if(isPlainObject(source.exerciseDrafts)){
+    Object.entries(source.exerciseDrafts).slice(0, 500).forEach(([key, draft])=>{
+      if(!isPlainObject(draft)) return;
+      const safeKey = sanitizeId(key);
+      if(!safeKey) return;
+      next.exerciseDrafts[safeKey] = {
+        answer: safeString(draft.answer, 5000),
+        updatedAt: Math.max(0, safeNumber(draft.updatedAt))
+      };
+    });
+  }
+
+  if(Array.isArray(source.reviewNotes)){
+    next.reviewNotes = source.reviewNotes.slice(-500).filter(isPlainObject).map(note=>({
+      key: sanitizeId(note.key),
+      rating: Math.max(0, Math.min(3, Math.floor(safeNumber(note.rating)))),
+      skillId: sanitizeId(note.skillId),
+      skillName: safeString(note.skillName, 120),
+      exIdx: Math.max(0, Math.floor(safeNumber(note.exIdx))),
+      question: safeString(note.question, 2000),
+      timestamp: Math.max(0, safeNumber(note.timestamp)),
+      nextIdx: Math.max(0, Math.floor(safeNumber(note.nextIdx))),
+      issues: Array.isArray(note.issues) ? note.issues.map(issue=>safeString(issue, 40)).slice(0, 10) : [],
+      note: safeString(note.note, 2000)
+    }));
+  }
+
+  if(Array.isArray(source.mockExams)){
+    next.mockExams = source.mockExams.slice(-200).filter(isPlainObject).map(exam=>({
+      duration: Math.max(0, safeNumber(exam.duration)),
+      phase: ['small','essay','done-small'].includes(exam.phase) ? exam.phase : 'small',
+      note: safeString(exam.note, 2000),
+      timestamp: Math.max(0, safeNumber(exam.timestamp))
+    }));
+  }
+
+  if(Array.isArray(source.errors)){
+    next.errors = source.errors.slice(-1000).filter(isPlainObject).map(err=>({
+      id: sanitizeId(err.id) || (Date.now().toString(36) + Math.random().toString(36).slice(2,6)),
+      question: safeString(err.question, 3000),
+      userAnswer: safeString(err.userAnswer, 5000),
+      refAnswer: safeString(err.refAnswer, 5000),
+      errorType: safeString(err.errorType, 80),
+      source: err.source === 'card' ? 'card' : 'exercise',
+      sourceId: sanitizeId(err.sourceId),
+      createdAt: Math.max(0, safeNumber(err.createdAt)),
+      correctCount: Math.max(0, Math.floor(safeNumber(err.correctCount))),
+      cleared: sanitizeBoolean(err.cleared)
+    }));
+  }
+
+  if(isPlainObject(source.dailyTime)){
+    Object.entries(source.dailyTime).slice(-365).forEach(([date, ms])=>{
+      const safeDate = sanitizeDateString(date);
+      next.dailyTime[safeDate] = Math.max(0, safeNumber(ms));
+    });
+  }
+
+  return next;
+}
+
+let state = sanitizeState(loadState());
 saveState(state);
 
 function migrateState(nextState){
@@ -171,7 +297,7 @@ function renderHome(){
   weekCard.innerHTML = `
     <div class="week-card">
       <div class="week-label">第 ${week} 周 / 共 12 周</div>
-      <div class="week-title">${plan.title}</div>
+      <div class="week-title">${escapeHtml(plan.title)}</div>
       <div class="week-phase">${plan.phase==='基础期'?'🟢 基础期':plan.phase==='强化期'?'🟡 强化期':'🔴 冲刺期'}</div>
       <div class="progress-bar"><div class="fill" style="width:${(week/12*100).toFixed(1)}%"></div></div>
     </div>
@@ -208,11 +334,11 @@ function renderHome(){
   });
 
   const taskHtml = tasks.map(t=>`
-    <div class="task-item" onclick="${t.kind==='skill'?`goToSkill('${t.sid}')`:`goToDeckReview('${t.deck}')`}">
+    <div class="task-item" onclick="${t.kind==='skill'?`goToSkill('${escapeJsString(t.sid)}')`:`goToDeckReview('${escapeJsString(t.deck)}')`}">
       <div class="task-check ${t.desc.includes('0/') && t.type==='练习' ? '' : 'done'}">${t.desc.includes('0/') && t.type==='练习' ? '' : '✓'}</div>
       <div class="task-info">
-        <div class="task-name">${t.name}</div>
-        <div class="task-desc">${t.desc}</div>
+        <div class="task-name">${escapeHtml(t.name)}</div>
+        <div class="task-desc">${escapeHtml(t.desc)}</div>
       </div>
       <span class="tag ${t.type==='练习'?'tag-blue':'tag-yellow'}">${t.type}</span>
     </div>
@@ -222,7 +348,7 @@ function renderHome(){
   // Start button
   const firstPending = tasks.find(t=>t.type==='练习' && t.desc.includes('0/'));
   document.getElementById('home-start-btn').innerHTML = firstPending
-    ? `<button class="btn btn-primary btn-block" onclick="goToSkill('${firstPending.sid}')">▶ 开始今日练习</button>`
+    ? `<button class="btn btn-primary btn-block" onclick="goToSkill('${escapeJsString(firstPending.sid)}')">▶ 开始今日练习</button>`
     : (tasks.find(t=>t.type==='复习' && !t.desc.includes('0 张'))
       ? `<button class="btn btn-accent btn-block" onclick="switchView('review')">📖 去复习卡片</button>`
       : `<button class="btn btn-primary btn-block" onclick="switchView('practice')">✏️ 开始练习</button>`);
@@ -270,9 +396,9 @@ function renderReview(){
     const newC = SR.getNewCards([prefix]).length;
     const total = deck.cards.length;
     html += `
-      <div class="deck-card" onclick="startDeckReview('${dk}')">
-        <div class="deck-icon">${deck.icon}</div>
-        <div class="deck-name">${deck.name}</div>
+      <div class="deck-card" onclick="startDeckReview('${escapeJsString(dk)}')">
+        <div class="deck-icon">${escapeHtml(deck.icon)}</div>
+        <div class="deck-name">${escapeHtml(deck.name)}</div>
         <div class="deck-stats">
           ${due>0?`<span class="deck-due">${due} 待复习</span> · `:''}
           ${newC>0?`${newC} 新 · `:''}
@@ -496,18 +622,18 @@ function renderPractice(){
     const doneCount = matchedSkills.reduce((a,s)=>a+countSkillDone(s.id),0);
     const totalEx = matchedSkills.reduce((a,s)=>a+s.exercises.length,0);
     html += `
-      <div class="skill-type-card" onclick="toggleSkillType('${type.typeId}')">
+      <div class="skill-type-card" onclick="toggleSkillType('${escapeJsString(type.typeId)}')">
         <div class="stc-header">
-          <div class="stc-name">${type.typeName} <span style="font-size:11px;color:var(--text3)">${type.scoreRange}</span></div>
+          <div class="stc-name">${escapeHtml(type.typeName)} <span style="font-size:11px;color:var(--text3)">${escapeHtml(type.scoreRange)}</span></div>
           <span class="tag tag-blue">${doneCount}/${totalEx}</span>
         </div>
-        <div class="stc-tagline">${type.tagline}</div>
-        <div class="stc-skills" id="skills-${type.typeId}" style="display:${query?'block':'none'}">
+        <div class="stc-tagline">${escapeHtml(type.tagline)}</div>
+        <div class="stc-skills" id="skills-${escapeAttr(type.typeId)}" style="display:${query?'block':'none'}">
           ${matchedSkills.map(s=>{
             const sd = countSkillDone(s.id);
-            return `<div class="skill-item" onclick="event.stopPropagation();openSkill('${s.id}')">
-              <span>${s.name}</span>
-              <span class="tag ${sd===s.exercises.length?'tag-green':'tag-blue'}">${sd}/${s.exercises.length}</span>
+            return `<div class="skill-item" onclick="event.stopPropagation();openSkill('${escapeJsString(s.id)}')">
+              <span>${escapeHtml(s.name)}</span>
+          <span class="tag ${sd===s.exercises.length?'tag-green':'tag-blue'}">${safeNumber(sd)}/${safeNumber(s.exercises.length)}</span>
             </div>`;
           }).join('')}
         </div>
@@ -555,7 +681,7 @@ function showVocabQuestion(){
   currentVocabCard = vocabQueue[vocabIdx];
   if(!currentVocabCard){ exitVocabTrainer(); return; }
   document.getElementById('vocab-counter').textContent = `${vocabIdx+1} / ${vocabQueue.length}`;
-  document.getElementById('vocab-question').innerHTML = `请把这句大白话改成规范表达：<br><strong>${currentVocabCard.front}</strong>`;
+  document.getElementById('vocab-question').innerHTML = `请把这句大白话改成规范表达：<br><strong>${escapeHtml(currentVocabCard.front)}</strong>`;
   document.getElementById('vocab-answer').value = '';
   document.getElementById('vocab-ref').classList.remove('show');
   document.getElementById('vocab-ref').innerHTML = '';
@@ -576,7 +702,7 @@ function checkVocabAnswer(){
   const answer = document.getElementById('vocab-answer').value;
   const hitCount = getVocabHitCount(answer, currentVocabCard.back);
   const hitText = hitCount ? `<div class="vocab-hit">命中 ${hitCount} 个关键词，可自评为规范。</div>` : '<div style="color:var(--accent)">暂未命中参考关键词，请对照修改表达。</div>';
-  document.getElementById('vocab-ref').innerHTML = `${hitText}<strong>参考表达：</strong>${currentVocabCard.back}<br><br><strong>例句：</strong>${currentVocabCard.example || '无'}`;
+  document.getElementById('vocab-ref').innerHTML = `${hitText}<strong>参考表达：</strong>${escapeHtml(currentVocabCard.back)}<br><br><strong>例句：</strong>${escapeHtml(currentVocabCard.example || '无')}`;
   document.getElementById('vocab-ref').classList.add('show');
   document.getElementById('vocab-rate').classList.remove('hidden');
   addStudyTime(30000);
@@ -729,7 +855,7 @@ function showMaterialQuestion(){
   document.getElementById('material-text').textContent = currentMaterial.material;
   const allTags = ['主体','问题','原因','对策','成效','数据结论'];
   document.getElementById('material-tags').innerHTML = allTags.map(tag=>
-    `<label><input type="checkbox" value="${tag}">${tag}</label>`
+    `<label><input type="checkbox" value="${escapeAttr(tag)}">${escapeHtml(tag)}</label>`
   ).join('');
   document.getElementById('material-answer').value = '';
   document.getElementById('material-ref').classList.remove('show');
@@ -747,9 +873,9 @@ function checkMaterialAnswer(){
   const missed = currentMaterial.tags.filter(tag=>!selected.includes(tag));
   const extra = selected.filter(tag=>!currentMaterial.tags.includes(tag));
   const result = missed.length || extra.length
-    ? `<div style="color:var(--accent)">标签识别：漏选 ${missed.join('、') || '无'}；多选 ${extra.join('、') || '无'}</div>`
+    ? `<div style="color:var(--accent)">标签识别：漏选 ${escapeHtml(missed.join('、') || '无')}；多选 ${escapeHtml(extra.join('、') || '无')}</div>`
     : '<div class="vocab-hit">标签识别准确</div>';
-  document.getElementById('material-ref').innerHTML = `${result}<strong>参考提炼：</strong><br>${currentMaterial.ref}`;
+  document.getElementById('material-ref').innerHTML = `${result}<strong>参考提炼：</strong><br>${escapeHtml(currentMaterial.ref)}`;
   document.getElementById('material-ref').classList.add('show');
   document.getElementById('material-rate').classList.remove('hidden');
   addStudyTime(60000);
@@ -1097,15 +1223,15 @@ function renderErrorList(errors){
       <div class="ei-q">${escapeHtml(e.question)}</div>
       <div class="ei-type">
         <span class="tag ${typeTag}">${e.source==='card'?'卡片':'练习'}</span>
-        <span class="tag ${errTag}">${e.errorType}</span>
-        <span class="tag tag-green" style="margin-left:4px">✓${e.correctCount}/2</span>
+        <span class="tag ${errTag}">${escapeHtml(e.errorType)}</span>
+        <span class="tag tag-green" style="margin-left:4px">✓${safeNumber(e.correctCount)}/2</span>
       </div>
       <div class="ei-ref" onclick="this.classList.toggle('expanded')">${escapeHtml(e.refAnswer)}</div>
       <div class="ei-meta">
         <span>${new Date(e.createdAt).toLocaleDateString()}</span>
         <div class="ei-actions">
-          <button class="btn btn-sm btn-primary" onclick="markErrorCorrect('${e.id}')">✓ 掌握了</button>
-          <button class="btn btn-sm btn-outline" onclick="removeError('${e.id}')">删除</button>
+          <button class="btn btn-sm btn-primary" onclick="markErrorCorrect('${escapeJsString(e.id)}')">✓ 掌握了</button>
+          <button class="btn btn-sm btn-outline" onclick="removeError('${escapeJsString(e.id)}')">删除</button>
         </div>
       </div>
     </div>`;
@@ -1163,9 +1289,9 @@ function startWeekendReview(){
       <div class="rm-q">${i+1}. ${escapeHtml(e.question)}</div>
       <div class="rm-ref" id="wr-${i}"><strong>参考：</strong>${escapeHtml(e.refAnswer)}</div>
       <div style="display:flex;gap:6px;margin-top:8px">
-        <button class="btn btn-sm btn-primary" onclick="weekendRate('${e.id}',true,${i})">✓ 掌握了</button>
+        <button class="btn btn-sm btn-primary" onclick="weekendRate('${escapeJsString(e.id)}',true,${i})">✓ 掌握了</button>
         <button class="btn btn-sm btn-outline" onclick="document.getElementById('wr-${i}').classList.add('show')">看答案</button>
-        <button class="btn btn-sm btn-danger" onclick="weekendRate('${e.id}',false,${i})">❌ 还是不会</button>
+        <button class="btn btn-sm btn-danger" onclick="weekendRate('${escapeJsString(e.id)}',false,${i})">❌ 还是不会</button>
       </div>
     </div>
   `).join('');
@@ -1229,17 +1355,17 @@ function renderReviewSummary(){
     <div class="review-summary">
       ${rows.length ? rows.map(([issue,count])=>`
         <div class="rs-row">
-          <div class="rs-label">${issue}</div>
-          <div class="rs-bar"><div class="rs-fill" style="width:${Math.max(8, count/max*100)}%"></div></div>
-          <div class="rs-count">${count}</div>
+          <div class="rs-label">${escapeHtml(issue)}</div>
+          <div class="rs-bar"><div class="rs-fill" style="width:${safePercent(Math.max(8, count/max*100))}%"></div></div>
+          <div class="rs-count">${safeNumber(count)}</div>
         </div>
       `).join('') : '<div class="empty-hint">已记录复盘，但还没有勾选具体问题。</div>'}
       <div class="mt-12 text-sm text-muted">最近复盘</div>
       ${recent.map(note=>`
         <div class="handbook-item">
-          <h4>${escapeHtml(note.skillName)} · 第${note.exIdx+1}题</h4>
+          <h4>${escapeHtml(note.skillName)} · 第${safeNumber(note.exIdx)+1}题</h4>
           <div class="hb-body">${escapeHtml(note.note || (note.issues || []).join('、') || '未填写文字复盘')}</div>
-          <div class="hb-tag"><span class="tag ${note.rating===1?'tag-red':note.rating===2?'tag-yellow':'tag-green'}">自评${note.rating}</span></div>
+          <div class="hb-tag"><span class="tag ${note.rating===1?'tag-red':note.rating===2?'tag-yellow':'tag-green'}">自评${safeNumber(note.rating)}</span></div>
         </div>
       `).join('')}
     </div>
@@ -1255,7 +1381,7 @@ function renderHandbook(){
 
   const categories = ['全部', ...new Set(HANDBOOK_SECTIONS.map(item=>item.category))];
   tabs.innerHTML = categories.map(category=>
-    `<button class="filter-btn ${category===currentHandbookCategory?'active':''}" onclick="setHandbookCategory('${category}')">${category}</button>`
+    `<button class="filter-btn ${category===currentHandbookCategory?'active':''}" onclick="setHandbookCategory('${escapeJsString(category)}')">${escapeHtml(category)}</button>`
   ).join('');
 
   const query = (document.getElementById('handbook-search')?.value || '').trim().toLowerCase();
@@ -1267,9 +1393,9 @@ function renderHandbook(){
 
   list.innerHTML = items.length ? items.map(item=>`
     <div class="handbook-item">
-      <h4>${item.title}</h4>
-      <div class="hb-body">${item.body}</div>
-      <div class="hb-tag"><span class="tag tag-blue">${item.category}</span></div>
+      <h4>${escapeHtml(item.title)}</h4>
+      <div class="hb-body">${escapeHtml(item.body)}</div>
+      <div class="hb-tag"><span class="tag tag-blue">${escapeHtml(item.category)}</span></div>
     </div>
   `).join('') : '<div class="empty-hint">没有找到匹配的手册内容</div>';
 }
@@ -1346,10 +1472,12 @@ function renderStatsGrid(){
   const doneExercises = Object.keys(state.exerciseResults).filter(k=>state.exerciseResults[k].rate>=2).length;
   const streak = getStreak();
   const errors = state.errors.filter(e=>!e.cleared).length;
-  const vocabDone = state.vocabTrainer.done || 0;
-  const vocabRate = vocabDone ? Math.round((state.vocabTrainer.correct || 0)/vocabDone*100) : 0;
-  const materialDone = state.materialTrainer.done || 0;
-  const materialRate = materialDone ? Math.round((state.materialTrainer.correct || 0)/materialDone*100) : 0;
+  const vocabDone = Math.max(0, safeNumber(state.vocabTrainer.done));
+  const vocabCorrect = Math.max(0, safeNumber(state.vocabTrainer.correct));
+  const vocabRate = vocabDone ? safePercent(Math.round(vocabCorrect/vocabDone*100)) : 0;
+  const materialDone = Math.max(0, safeNumber(state.materialTrainer.done));
+  const materialCorrect = Math.max(0, safeNumber(state.materialTrainer.correct));
+  const materialRate = materialDone ? safePercent(Math.round(materialCorrect/materialDone*100)) : 0;
 
   document.getElementById('stats-grid').innerHTML = `
     <div class="stats-card"><div class="sc-num blue">${masteredCards}/${totalCards}</div><div class="sc-label">已掌握卡片</div></div>
@@ -1374,7 +1502,7 @@ function renderWeeklyChart(){
         if(r.rate>=2) correct++;
       }
     });
-    const rate = total>0 ? Math.round(correct/total*100) : 0;
+    const rate = total>0 ? safePercent(Math.round(correct/total*100)) : 0;
     const label = `第${4-w}周`;
     weeks.push({label,rate,total});
   }
@@ -1382,9 +1510,9 @@ function renderWeeklyChart(){
   container.innerHTML = `<div class="weekly-chart">${
     weeks.map(w=>`
       <div class="bar-row">
-        <div class="bar-label">${w.label}</div>
-        <div class="bar-track"><div class="bar-fill" style="width:${w.rate}%"></div></div>
-        <div class="bar-val">${w.rate}%${w.total?` (${w.total})`:''}</div>
+        <div class="bar-label">${escapeHtml(w.label)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${safePercent(w.rate)}%"></div></div>
+        <div class="bar-val">${safePercent(w.rate)}%${w.total?` (${safeNumber(w.total)})`:''}</div>
       </div>
     `).join('')
   }</div>`;
@@ -1403,9 +1531,9 @@ function renderSettings(){
     <div class="setting-item">
       <div>
         <div class="setting-label">📅 设置开始日期</div>
-        <div class="setting-desc">当前：${state.startDate}</div>
+        <div class="setting-desc">当前：${escapeHtml(state.startDate)}</div>
       </div>
-      <input type="date" value="${state.startDate}" onchange="setStartDate(this.value)"
+      <input type="date" value="${escapeAttr(state.startDate)}" onchange="setStartDate(this.value)"
         style="background:var(--card2);color:var(--text);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:4px 8px;font-size:12px">
     </div>
     <div class="setting-item">
@@ -1442,6 +1570,7 @@ function toggleTimer(el){
 }
 
 function setStartDate(val){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(val)) return;
   state.startDate = val;
   saveState(state);
   renderHome();
@@ -1479,12 +1608,12 @@ function openBackupFile(){
 
 function importBackup(file){
   if(!file) return;
+  if(file.size > 2 * 1024 * 1024){ alert('导入失败：备份文件过大。'); return; }
   const reader = new FileReader();
   reader.onload = function(){
     try{
       const data = JSON.parse(reader.result);
-      const nextState = data.state || data;
-      if(!nextState || typeof nextState !== 'object') throw new Error('invalid state');
+      const nextState = sanitizeState(data.state || data);
       const ok = confirm('导入会覆盖当前学习记录，确定继续吗？建议先导出当前数据备份。');
       if(!ok) return;
       saveState(nextState);
