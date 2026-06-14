@@ -58,6 +58,10 @@ const SR = {
 const STORE_KEY = 'sl_unified_state';
 const BACKUP_VERSION = 1;
 const STATE_VERSION = 2;
+const APP_VERSION = '2026.06.14-security';
+const APP_UPDATED_AT = '2026-06-14';
+const BACKUP_REMINDER_DAYS = 7;
+const BACKUP_REMINDER_EXERCISES = 20;
 function loadState(){
   try{ return JSON.parse(localStorage.getItem(STORE_KEY))||{}; }catch(e){ return {}; }
 }
@@ -128,6 +132,9 @@ function sanitizeState(input){
     mockExams: [],
     errors: [],
     dailyTime: {},
+    lastBackupAt: Math.max(0, safeNumber(source.lastBackupAt)),
+    backupReminderDismissedAt: Math.max(0, safeNumber(source.backupReminderDismissedAt)),
+    theme: ['dark','light'].includes(source.theme) ? source.theme : 'dark',
     timerEnabled: source.timerEnabled === undefined ? true : sanitizeBoolean(source.timerEnabled),
     startDate: sanitizeDateString(source.startDate)
   };
@@ -287,6 +294,45 @@ function addStudyTime(ms){
   saveState(state);
 }
 
+function getCompletedExerciseCount(){
+  return Object.keys(state.exerciseResults || {}).filter(k=>state.exerciseResults[k].rate>=2).length;
+}
+
+function shouldShowBackupReminder(){
+  const completed = getCompletedExerciseCount();
+  const daysSinceBackup = state.lastBackupAt ? (Date.now() - state.lastBackupAt) / 86400000 : Infinity;
+  const dismissedToday = state.backupReminderDismissedAt && getTodayString() === new Date(state.backupReminderDismissedAt).toISOString().slice(0,10);
+  if(dismissedToday) return false;
+  return completed >= BACKUP_REMINDER_EXERCISES || state.studyDates.length >= BACKUP_REMINDER_DAYS || daysSinceBackup >= BACKUP_REMINDER_DAYS;
+}
+
+function renderBackupReminder(){
+  const el = document.getElementById('backup-reminder');
+  if(!el) return;
+  if(!shouldShowBackupReminder()){
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = `
+    <div class="card backup-reminder-card">
+      <div>
+        <div class="setting-label">💾 建议备份学习记录</div>
+        <div class="setting-desc">浏览器缓存清理后记录可能丢失，建议导出一份 JSON。</div>
+      </div>
+      <div class="backup-reminder-actions">
+        <button class="btn btn-primary btn-sm" onclick="exportBackup()">立即导出</button>
+        <button class="btn btn-outline btn-sm" onclick="dismissBackupReminder()">今天不提醒</button>
+      </div>
+    </div>
+  `;
+}
+
+function dismissBackupReminder(){
+  state.backupReminderDismissedAt = Date.now();
+  saveState(state);
+  renderBackupReminder();
+}
+
 function renderHome(){
   const week = getCurrentWeek();
   const plan = WEEK_PLAN[week-1];
@@ -352,6 +398,7 @@ function renderHome(){
     : (tasks.find(t=>t.type==='复习' && !t.desc.includes('0 张'))
       ? `<button class="btn btn-accent btn-block" onclick="switchView('review')">📖 去复习卡片</button>`
       : `<button class="btn btn-primary btn-block" onclick="switchView('practice')">✏️ 开始练习</button>`);
+  renderBackupReminder();
 }
 
 function findSkill(sid){
@@ -1520,13 +1567,27 @@ function renderWeeklyChart(){
 
 function renderSettings(){
   const card = document.getElementById('settings-card');
+  const lastBackup = state.lastBackupAt ? new Date(state.lastBackupAt).toLocaleString() : '尚未导出';
   card.innerHTML = `
+    <div class="setting-item">
+      <div>
+        <div class="setting-label">ℹ️ 当前版本</div>
+        <div class="setting-desc">v${escapeHtml(APP_VERSION)} · 更新于 ${escapeHtml(APP_UPDATED_AT)}</div>
+      </div>
+    </div>
     <div class="setting-item">
       <div>
         <div class="setting-label">⏱️ 计时器</div>
         <div class="setting-desc">练习和复习时显示倒计时</div>
       </div>
       <div class="toggle ${state.timerEnabled?'on':''}" onclick="toggleTimer(this)"></div>
+    </div>
+    <div class="setting-item">
+      <div>
+        <div class="setting-label">🌓 亮色模式</div>
+        <div class="setting-desc">切换适合白天学习的浅色界面</div>
+      </div>
+      <div class="toggle ${state.theme==='light'?'on':''}" onclick="toggleTheme(this)"></div>
     </div>
     <div class="setting-item">
       <div>
@@ -1539,12 +1600,26 @@ function renderSettings(){
     <div class="setting-item">
       <div>
         <div class="setting-label">💾 数据备份</div>
-        <div class="setting-desc">导出/导入学习记录，换设备或清缓存前建议备份</div>
+        <div class="setting-desc">上次导出：${escapeHtml(lastBackup)}</div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         <button class="btn btn-primary btn-sm" onclick="exportBackup()">导出</button>
         <button class="btn btn-outline btn-sm" onclick="openBackupFile()">导入</button>
       </div>
+    </div>
+    <div class="setting-item">
+      <div>
+        <div class="setting-label">🩺 数据体检</div>
+        <div class="setting-desc">检查本地存储、记录数量和备份状态</div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="runDataHealthCheck()">体检</button>
+    </div>
+    <div class="setting-item">
+      <div>
+        <div class="setting-label">📝 错题导出</div>
+        <div class="setting-desc">导出 Markdown 复习笔记，适合打印或考前复盘</div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="exportErrorsMarkdown()">导出</button>
     </div>
     <div class="setting-item">
       <div>
@@ -1567,6 +1642,19 @@ function toggleTimer(el){
   state.timerEnabled = !state.timerEnabled;
   el.classList.toggle('on', state.timerEnabled);
   saveState(state);
+}
+
+function applyTheme(){
+  document.body.classList.toggle('theme-light', state.theme === 'light');
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  if(themeMeta) themeMeta.setAttribute('content', state.theme === 'light' ? '#f6f7fb' : '#1a1a2e');
+}
+
+function toggleTheme(el){
+  state.theme = state.theme === 'light' ? 'dark' : 'light';
+  el.classList.toggle('on', state.theme === 'light');
+  saveState(state);
+  applyTheme();
 }
 
 function setStartDate(val){
@@ -1598,6 +1686,72 @@ function exportBackup(){
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+  state.lastBackupAt = Date.now();
+  state.backupReminderDismissedAt = Date.now();
+  saveState(state);
+  renderBackupReminder();
+  renderSettings();
+}
+
+function downloadTextFile(filename, content, type='text/plain'){
+  const blob = new Blob([content], {type});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function runDataHealthCheck(){
+  let storageOk = true;
+  try{
+    localStorage.setItem('__sl_health_check__','ok');
+    localStorage.removeItem('__sl_health_check__');
+  }catch(e){ storageOk = false; }
+  const report = [
+    `本地存储：${storageOk ? '正常' : '不可写'}`,
+    `学习天数：${state.studyDates.length}`,
+    `已完成练习：${getCompletedExerciseCount()}`,
+    `未清错题：${state.errors.filter(e=>!e.cleared).length}`,
+    `复盘记录：${state.reviewNotes.length}`,
+    `草稿数量：${Object.keys(state.exerciseDrafts || {}).length}`,
+    `上次备份：${state.lastBackupAt ? new Date(state.lastBackupAt).toLocaleString() : '尚未导出'}`,
+    `App 版本：${APP_VERSION}`
+  ].join('\n');
+  alert(report);
+}
+
+function exportErrorsMarkdown(){
+  const errors = state.errors.filter(e=>!e.cleared);
+  if(!errors.length){ alert('当前没有未清错题可导出。'); return; }
+  const markdown = [
+    '# 申论统一修炼台错题本',
+    '',
+    `导出时间：${new Date().toLocaleString()}`,
+    `未清错题：${errors.length} 题`,
+    '',
+    ...errors.map((e,i)=>[
+      `## ${i+1}. ${e.errorType || '错题'}`,
+      '',
+      `- 来源：${e.source === 'card' ? '卡片' : '练习'}`,
+      `- 创建时间：${new Date(e.createdAt).toLocaleDateString()}`,
+      `- 掌握进度：${safeNumber(e.correctCount)}/2`,
+      '',
+      '### 题目',
+      e.question || '无',
+      '',
+      '### 我的答案',
+      e.userAnswer || '未填写',
+      '',
+      '### 参考答案',
+      e.refAnswer || '无',
+      ''
+    ].join('\n'))
+  ].join('\n');
+  downloadTextFile(`申论统一修炼台-错题本-${getTodayString()}.md`, markdown, 'text/markdown');
 }
 
 function openBackupFile(){
@@ -1631,6 +1785,8 @@ function importBackup(file){
 // INITIALIZATION
 // ============================================================
 function init(){
+  applyTheme();
+
   // Initialize SR data for all cards
   Object.values(CARD_DB).forEach(deck=>{
     deck.cards.forEach(c=>SR.initCard(c.id));
@@ -1649,6 +1805,10 @@ function init(){
 
   // Render initial view
   renderHome();
+
+  if('serviceWorker' in navigator && location.protocol !== 'file:'){
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  }
 }
 
 window.addEventListener('beforeunload', ()=>{

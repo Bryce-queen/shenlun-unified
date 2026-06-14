@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="申论统一修炼台">
+  <rect width="512" height="512" rx="112" fill="#1a1a2e"/>
+  <path d="M128 146h256v220H128z" fill="#1e2a45" stroke="#4fc3f7" stroke-width="18"/>
+  <path d="M174 202h164M174 256h164M174 310h112" stroke="#ffd54f" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="376" cy="354" r="44" fill="#4fc3f7"/>
+  <path d="M357 354l13 14 29-34" fill="none" stroke="#1a1a2e" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

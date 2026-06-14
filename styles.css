@@ -18,6 +18,22 @@
   --tab-h: 60px;
   --safe-b: env(safe-area-inset-bottom, 0px);
 }
+body.theme-light {
+  --bg: #f6f7fb;
+  --bg2: #ffffff;
+  --bg3: #e7f3ff;
+  --primary: #1479b8;
+  --primary-dim: rgba(20,121,184,0.12);
+  --accent: #9a6400;
+  --accent-dim: rgba(154,100,0,0.12);
+  --danger: #c62828;
+  --success: #2e7d32;
+  --text: #1f2937;
+  --text2: #64748b;
+  --text3: #94a3b8;
+  --card: #ffffff;
+  --card2: #eef2f7;
+}
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
@@ -27,6 +43,17 @@ body {
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
   min-height: 100vh;
+}
+body.theme-light .week-card {
+  background: linear-gradient(135deg, #e0f2fe, #ffffff);
+}
+body.theme-light .flashcard-front,
+body.theme-light .flashcard-back {
+  background: linear-gradient(135deg, #ffffff, #eef6ff);
+}
+body.theme-light .tab-bar,
+body.theme-light .modal {
+  box-shadow: 0 -8px 24px rgba(15,23,42,.08);
 }
 button { cursor:pointer; border:none; font-family:inherit; }
 input,textarea { font-family:inherit; }
@@ -139,6 +166,11 @@ button, input, textarea, select { font-size:16px; }
   text-align:center; padding:40px 20px; color:var(--text2);
 }
 .empty-state .emoji { font-size:48px; margin-bottom:12px; }
+.backup-reminder-card {
+  display:flex; justify-content:space-between; align-items:center; gap:12px;
+  border-left:3px solid var(--accent);
+}
+.backup-reminder-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
 
 /* ============ Home View ============ */
 .home-header {

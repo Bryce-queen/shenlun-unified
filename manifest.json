@@ -1,0 +1,19 @@
+{
+  "name": "申论统一修炼台",
+  "short_name": "申论修炼台",
+  "description": "离线申论备考、复习、练习和错题管理工具。",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
