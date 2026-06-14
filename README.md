@@ -15,6 +15,7 @@
 | `sw.js` | 离线缓存 Service Worker |
 | `404.html` | GitHub Pages 兜底跳转页 |
 | `check-release.js` | 发布前静态检查脚本 |
+| `smoke-test.js` | 无依赖页面烟雾测试 |
 
 ## 五个功能模块
 
@@ -63,6 +64,7 @@
 ```bash
 node --check app.js
 node check-release.js
+node smoke-test.js
 ```
 
 ## 数据备份
@@ -70,6 +72,8 @@ node check-release.js
 学习记录默认保存在当前浏览器中。建议定期进入「📊 数据 → ⚙️ 设置 → 数据备份」导出 JSON 备份文件，换设备或清理浏览器缓存后可通过「导入」恢复记录。
 
 App 会在连续使用、练习数量增加或距离上次备份较久时，在首页提示导出备份。设置页提供数据体检、亮色模式切换和错题 Markdown 导出。
+
+部署后如果 Service Worker 检测到新版本，页面顶部会提示刷新。导入备份前会显示备份来源、导出时间、学习天数、练习数、错题数、复盘数和草稿数，确认后才会覆盖当前记录。
 
 ## 建议节奏
 

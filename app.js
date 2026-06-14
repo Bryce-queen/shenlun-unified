@@ -1754,6 +1754,68 @@ function exportErrorsMarkdown(){
   downloadTextFile(`申论统一修炼台-错题本-${getTodayString()}.md`, markdown, 'text/markdown');
 }
 
+function getStateSummary(nextState){
+  return {
+    studyDays: nextState.studyDates.length,
+    completedExercises: Object.keys(nextState.exerciseResults || {}).filter(k=>nextState.exerciseResults[k].rate>=2).length,
+    activeErrors: nextState.errors.filter(e=>!e.cleared).length,
+    reviewNotes: nextState.reviewNotes.length,
+    drafts: Object.keys(nextState.exerciseDrafts || {}).length,
+    startDate: nextState.startDate,
+    theme: nextState.theme === 'light' ? '亮色' : '暗色'
+  };
+}
+
+function formatImportPreview(nextState, data){
+  const summary = getStateSummary(nextState);
+  const exportedAt = data.exportedAt ? new Date(data.exportedAt).toLocaleString() : '未知';
+  return [
+    '导入会覆盖当前学习记录，建议先导出当前数据备份。',
+    '',
+    `备份来源：${data.app || '未知应用'}`,
+    `导出时间：${exportedAt}`,
+    `开始日期：${summary.startDate}`,
+    `学习天数：${summary.studyDays}`,
+    `已完成练习：${summary.completedExercises}`,
+    `未清错题：${summary.activeErrors}`,
+    `复盘记录：${summary.reviewNotes}`,
+    `草稿数量：${summary.drafts}`,
+    `主题：${summary.theme}`,
+    '',
+    '确定导入这份备份吗？'
+  ].join('\n');
+}
+
+let waitingServiceWorker = null;
+
+function showUpdateBanner(worker){
+  waitingServiceWorker = worker || waitingServiceWorker;
+  document.getElementById('update-banner')?.classList.remove('hidden');
+}
+
+function dismissUpdateBanner(){
+  document.getElementById('update-banner')?.classList.add('hidden');
+}
+
+function reloadForUpdate(){
+  if(waitingServiceWorker) waitingServiceWorker.postMessage({type:'SKIP_WAITING'});
+  location.reload();
+}
+
+function setupUpdateChecks(registration){
+  if(registration.waiting) showUpdateBanner(registration.waiting);
+  registration.addEventListener('updatefound', ()=>{
+    const worker = registration.installing;
+    if(!worker) return;
+    worker.addEventListener('statechange', ()=>{
+      if(worker.state === 'installed' && navigator.serviceWorker.controller) showUpdateBanner(worker);
+    });
+  });
+  navigator.serviceWorker.addEventListener('message', event=>{
+    if(event.data && event.data.type === 'APP_UPDATED') showUpdateBanner(registration.waiting);
+  });
+}
+
 function openBackupFile(){
   const input = document.getElementById('backup-file');
   input.value = '';
@@ -1768,7 +1830,7 @@ function importBackup(file){
     try{
       const data = JSON.parse(reader.result);
       const nextState = sanitizeState(data.state || data);
-      const ok = confirm('导入会覆盖当前学习记录，确定继续吗？建议先导出当前数据备份。');
+      const ok = confirm(formatImportPreview(nextState, data));
       if(!ok) return;
       saveState(nextState);
       if(data.sr && typeof data.sr === 'object') SR.save(data.sr);
@@ -1794,10 +1856,12 @@ function init(){
 
   // Add error badge
   const errorTab = document.querySelector('.tab[data-view="errors"]');
-  const badge = document.createElement('span');
-  badge.className='badge';
-  badge.style.display='none';
-  errorTab.appendChild(badge);
+  if(errorTab && !errorTab.querySelector?.('.badge')){
+    const badge = document.createElement('span');
+    badge.className='badge';
+    badge.style.display='none';
+    errorTab.appendChild(badge);
+  }
   updateErrorBadge();
 
   // Auto-record study day
@@ -1807,7 +1871,7 @@ function init(){
   renderHome();
 
   if('serviceWorker' in navigator && location.protocol !== 'file:'){
-    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    navigator.serviceWorker.register('./sw.js').then(setupUpdateChecks).catch(()=>{});
   }
 }
 

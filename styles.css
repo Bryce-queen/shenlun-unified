@@ -65,6 +65,17 @@ button, input, textarea, select { font-size:16px; }
 .view.active { display:block; animation: fadeIn .25s ease; }
 @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
 
+.update-banner {
+  position:fixed; top:10px; left:50%; transform:translateX(-50%);
+  z-index:300; width:calc(100% - 24px); max-width:456px;
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:10px; border-radius:12px; background:var(--bg2); color:var(--text);
+  border:1px solid rgba(79,195,247,.25); box-shadow:0 12px 32px rgba(0,0,0,.28);
+  font-size:13px;
+}
+.update-banner.hidden { display:none; }
+.update-banner span { flex:1; }
+
 /* ============ Bottom Tabs ============ */
 .tab-bar {
   position:fixed; bottom:0; left:50%; transform:translateX(-50%);

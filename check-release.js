@@ -9,6 +9,7 @@ const requiredFiles = [
   'app.js',
   'manifest.json',
   'sw.js',
+  'smoke-test.js',
   '404.html',
   '申论统一修炼台.html'
 ];

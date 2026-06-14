@@ -11,6 +11,12 @@
 </head>
 <body>
 
+<div class="update-banner hidden" id="update-banner">
+  <span>发现新版本，刷新后生效。</span>
+  <button class="btn btn-primary btn-sm" onclick="reloadForUpdate()">立即刷新</button>
+  <button class="btn btn-outline btn-sm" onclick="dismissUpdateBanner()">稍后</button>
+</div>
+
 <div id="app">
   <!-- ============ HOME VIEW ============ -->
   <div id="view-home" class="view active">
